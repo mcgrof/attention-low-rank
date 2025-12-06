@@ -3,61 +3,94 @@
 \usepackage{amsmath,amssymb}
 \usepackage{times}
 
-\title{\textbf{Why Transformer Attention is Low-Rank}}
+% Tighten spacing
+\setlength{\parskip}{0.35em}
+\setlength{\parindent}{0em}
+\usepackage{titlesec}
+\titlespacing*{\section}{0pt}{0.4em}{0.2em}
+
+% Reduce space before title
+\makeatletter
+\def\@maketitle{
+  \vspace*{-2em}
+  \begin{center}
+    {\Large\bfseries \@title \par}
+    \vspace{0.5em}
+    {\normalsize \@author \par}
+    \vspace{0.25em}
+    {\normalsize \@date \par}
+  \end{center}
+  \vspace{-1.2em}
+}
+\makeatother
+
+\title{On the Intrinsic Dimensional Structure of Transformer Attention}
 \author{Luis Chamberlain \\ \texttt{mcgrof.c@samsung.com}}
-\date{December 4, 2025}
+\date{December 5, 2025}
 
 \begin{document}
 \maketitle
-\vspace{-2em}
 \begin{center}
-\textit{LayerNorm subtracts the mean. That's it.}
+\textit{LayerNorm removes one dimension; learning determines the rest.}
 \end{center}
 
-\section*{The Claim}
+\section*{Geometric Constraint}
 
-Transformers apply LayerNorm before attention. LayerNorm subtracts the mean, forcing all vectors onto a $(d{-}1)$-dimensional hyperplane. Since $Q$ and $K$ are linear projections of these vectors, $\textbf{rank}(QK^\top) \leq d{-}1$.
+LayerNorm centers each token vector by subtracting its mean component.  
+This eliminates the $[1,1,\ldots,1]$ direction and places every input to attention on a $(d{-}1)$-dimensional hyperplane.  
+All subsequent projections operate entirely within this reduced geometry.  
+The geometry shows only that full rank is unnecessary; it does not predict how much lower the learned effective rank may become.
 
-\section*{The Proof (2D $\to$ 1D)}
+\section*{2D $\to$ 1D Example}
 
-Take $\mathbf{x} = [x_1, x_2]$. Subtract the mean $\mu = (x_1 + x_2)/2$. The result $\mathbf{z} = [x_1 - \mu,\; x_2 - \mu]$ satisfies:
-%
+For $\mathbf{x} = [x_1,x_2]$ with mean $\mu = (x_1+x_2)/2$,
 \[
-z_1 + z_2 \;=\; (x_1 - \mu) + (x_2 - \mu) \;=\; x_1 + x_2 - 2\mu \;=\; 0
+\mathbf{z} = [x_1-\mu,\;x_2-\mu]
 \]
-%
-So $z_2 = -z_1$. Every centered vector is $\mathbf{z} = [a, -a] = a \cdot [1, -1]$. Stack $N$ such vectors:
-%
+satisfies
+\[
+z_1 + z_2 = 0 \quad\Rightarrow\quad z_2 = -z_1.
+\]
+Every centered vector lies on the line spanned by $[1,-1]$.  
+Stacking $N$ such vectors produces a rank-1 matrix:
 \[
 \begin{bmatrix}
-1.2 & -1.2 \\
--0.8 & 0.8 \\
-2.0 & -2.0 \\
+1.2 & -1.2\\
+-0.8 & 0.8\\
+2.0 & -2.0\\
 0.5 & -0.5
 \end{bmatrix}
-\;=\;
-\begin{bmatrix}
-1.2 \\
--0.8 \\
-2.0 \\
-0.5
-\end{bmatrix}
-\times
-\begin{bmatrix}
-1 & -1
-\end{bmatrix}
+=
+\begin{bmatrix}1.2\\-0.8\\2.0\\0.5\end{bmatrix}
+\begin{bmatrix}1\;\; -1\end{bmatrix}.
 \]
-%
-Outer product: $(4 \times 1) \times (1 \times 2) \to (4 \times 2)$ matrix. \textbf{Rank = 1}, no matter how many rows.
 
 \section*{Generalization to $d$ Dimensions}
 
-In $d$ dimensions: $z_1 + z_2 + \cdots + z_d = 0$. One constraint on $d$ variables $\to$ $(d{-}1)$-dimensional subspace. The $[1,1,\ldots,1]$ direction is gone. Any matrix of such vectors has rank $\leq d{-}1$. Linear projections $Q = W_q \mathbf{z}$ and $K = W_k \mathbf{z}$ cannot increase rank, so $\textbf{rank}(QK^\top) \leq d{-}1$.
+LayerNorm enforces
+\[
+z_1 + z_2 + \cdots + z_d = 0,
+\]
+so all token embeddings lie in a $(d{-}1)$-dimensional subspace.  
+Thus any matrix of centered embeddings satisfies
+\[
+\mathrm{rank}(Z) \le d{-}1.
+\]
+Since attention uses linear projections,
+\[
+Q = ZW_q,\qquad K = ZW_k,
+\]
+it follows that
+\[
+\mathrm{rank}(Q),\,\mathrm{rank}(K) \le d{-}1.
+\]
+All similarity structure in $QK^\top$ arises from these $(d{-}1)$ available directions.
 
-\section*{Verification}
+\section*{Learned Dimensionality}
 
-Any vector decomposes as: $\;\mathbf{x} = \mu \cdot [1,1,\ldots,1] + (\mathbf{x} - \mu)$
-
-First term: rank-1. Second term: LayerNorm output ($d{-}1$ dimensions). Adding one rank-1 component reconstructs the original. That component is exactly what LayerNorm deletes. \hfill $\blacksquare$
+In practice, trained attention mechanisms often rely on a much smaller subset of directions inside the
+LayerNorm hyperplane. The architectural constraint provides the ambient $(d{-}1)$-dimensional space; learning
+determines how many of those dimensions are actually used. Thus the intrinsic geometry defines the ceiling,
+while the effective rank emerges from optimization and data.
 
 \end{document}
